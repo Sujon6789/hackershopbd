@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>HACKER SHOP BD - Free Fire Location & Headshot Panel</title>
+    
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js">
+    </script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js">
+    </script>
+    
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; font-family:'Segoe UI',system-ui,sans-serif; }
+        body { background:#0a0a0a; padding-bottom:80px; -webkit-text-size-adjust:100%; overflow-x:hidden; }
+        
+        .sync-status {
+            position:fixed; top:8px; right:8px; z-index:500; font-size:9px; padding:3px 8px;
+            border-radius:10px; font-weight:700; letter-spacing:0.5px;
+        }
+        .sync-online { background:#003300; color:#00ff00; border:1px solid #00ff00; }
+        .sync-offline { background:#330000; color:#ff0000; border:1px solid #ff0000; animation:blink 1s infinite; }
+        @keyframes blink { 0%,100% { opacity:1; } 50% { opacity:0.5; } }
+        
+        .header { background:#111; padding:10px 14px; display:flex; align-items:center; gap:10px; position:sticky; top:0; z-index:99; border-bottom:2px solid #ff0000; }
+        .logo { font-weight:900; font-size:16px; background:#000; color:#ff0000; padding:6px 10px; border-radius:6px; white-space:nowrap; border:1px solid #ff0000; letter-spacing:1px; }
+        .logo span { color:#ff6600; }
+        .search-box-container { position:relative; flex:1; }
+        .search-input { width:100%; padding:8px 35px 8px 12px; border-radius:25px; border:1px solid #ff0000; background:#1a1a1a; outline:none; font-size:14px; color:#ff0000; }
+        .search-input::placeholder { color:#660000; }
+        .search-icon-right { position:absolute; right:12px; top:50%; transform:translateY(-50%); color:#ff0000; font-size:14px; cursor:pointer; }
+        
+        .categories { display:flex; gap:8px; padding:12px; overflow-x:auto; background:#0f0f0f; white-space:nowrap; border-bottom:1px solid #1a0000; }
+        .cat { padding:8px 18px; background:#1a1a1a; border-radius:25px; font-size:12px; cursor:pointer; color:#ff4444; font-weight:700; flex-shrink:0; border:1px solid #330000; transition:0.2s; }
+        .cat.active { background:#ff0000; color:#000; border-color:#ff0000; font-weight:900; }
+        
+        .products { display:grid; grid-template-columns:1fr 1fr; gap:10px; padding:10px; }
+        .card { background:#111; border-radius:16px; padding:10px; position:relative; border:1px solid #222; cursor:pointer; }
+        .card:active { transform:scale(0.98); }
+        .save-badge { position:absolute; top:10px; left:10px; background:#ff0000; color:#fff; padding:3px 10px; border-radius:15px; font-size:10px; z-index:2; font-weight:700; }
+        .card img { width:100%; height:140px; border-radius:12px; object-fit:cover; margin-bottom:8px; border:1px solid #333; }
+        .card h3 { font-size:12px; color:#ff0000; margin-bottom:4px; padding:0 3px; height:35px; overflow:hidden; font-weight:800; line-height:1.2; }
+        .old-price { text-decoration:line-through; color:#555; font-size:11px; padding:0 3px; }
+        .price-row { display:flex; align-items:center; gap:5px; margin:4px 0 8px; padding:0 3px; }
+        .current-price { color:#ff0000; font-weight:900; font-size:16px; }
+        .discount-tag { background:#ff0000; color:#000; padding:2px 7px; border-radius:10px; font-size:9px; font-weight:700; }
+        .add-cart-btn { display:flex; align-items:center; justify-content:center; gap:5px; width:100%; padding:8px 0; background:#1a0000; border:1px solid #ff0000; border-radius:10px; cursor:pointer; margin-top:auto; }
+        .add-cart-btn-text { color:#ff0000!important; font-weight:700; font-size:12px; }
+        .no-results { grid-column:1/-1; text-align:center; padding:30px; background:#111; border-radius:16px; color:#ff0000; border:1px solid #222; }
+        
+        .bottom-nav { position:fixed; bottom:0; width:100%; background:#0f0f0f; display:flex; justify-content:space-around; padding:8px 5px; border-top:2px solid #ff0000; z-index:100; }
+        .nav-item { text-align:center; color:#660000; font-size:10px; font-weight:700; flex:1; cursor:pointer; }
+        .nav-item.active { color:#ff0000; }
+        .nav-icon { font-size:20px; display:block; margin-bottom:3px; position:relative; }
+        .cart-badge { position:absolute; top:-6px; right:-6px; background:#ff0000; color:#fff; border-radius:15px; padding:2px 5px; font-size:9px; font-weight:700; min-width:16px; text-align:center; }
+        
+        /* Free Delivery Badge */
+        .free-delivery-badge {
+            display:inline-block;
+            background:linear-gradient(135deg, #003300, #001a00);
+            color:#00ff00;
+            padding:3px 8px;
+            border-radius:12px;
+            font-size:9px;
+            font-weight:700;
+            border:1px solid #00ff00;
+            animation:freeGlow 2s infinite alternate;
+        }
+        @keyframes freeGlow {
+            0% { box-shadow:0 0 5px rgba(0,255,0,0.3); }
+            100% { box-shadow:0 0 15px rgba(0,255,0,0.6); }
+        }
+        
+        .detail-view { display:none; }
+        .slider-container { position:relative; background:#0f0f0f; padding:15px 10px 10px; text-align:center; }
+        .slider-main { width:100%; height:250px; object-fit:contain; border-radius:16px; border:1px solid #ff0000; }
+        .slider-btn { position:absolute; top:50%; transform:translateY(-50%); background:rgba(255,0,0,0.5); color:#fff; border:1px solid #ff0000; width:32px; height:32px; border-radius:50%; font-size:18px; cursor:pointer; z-index:10; }
+        .slider-btn.prev { left:12px; } .slider-btn.next { right:12px; }
+        .thumbnails { display:flex; gap:8px; padding:10px; overflow-x:auto; justify-content:center; background:#0a0a0a; }
+        .thumb { width:60px; height:60px; object-fit:cover; border-radius:10px; cursor:pointer; border:2px solid #222; opacity:0.6; flex-shrink:0; }
+        .thumb.active { border-color:#ff0000; opacity:1; }
+        .info-card { background:#111; border-radius:20px 20px 0 0; margin-top:-8px; padding:18px; border:1px solid #222; }
+        .product-title { font-size:18px; font-weight:900; color:#ff0000; line-height:1.2; margin-bottom:10px; }
+        .price-section { display:flex; align-items:baseline; flex-wrap:wrap; gap:8px; margin:10px 0; }
+        .stars { color:#ffd700; font-size:16px; letter-spacing:2px; }
+        .section { background:#111; margin-top:10px; padding:14px; border-radius:16px; border:1px solid #222; }
+        .section-title { font-size:16px; font-weight:900; margin-bottom:10px; border-left:4px solid #ff0000; padding-left:10px; color:#ff0000; }
+        .spec-list,.highlight-list { list-style:none; padding-left:3px; color:#ccc; }
+        .spec-list li,.highlight-list li { margin-bottom:8px; font-size:13px; display:flex; gap:8px; }
+        .spec-list li::before,.highlight-list li::before { content:"🔥"; font-size:14px; }
+        .desc-text { font-size:13px; line-height:1.4; color:#ccc; }
+        .review-item { border-bottom:1px solid #222; padding:10px 0; color:#ccc; }
+        .reviewer { font-weight:700; font-size:13px; color:#ff0000; }
+        .review-text { font-size:12px; color:#aaa; margin-top:4px; }
+        .related-section { background:#111; margin-top:10px; padding:14px 0 16px 14px; border:1px solid #222; border-radius:16px; }
+        .related-title { font-size:16px; font-weight:900; margin-bottom:12px; color:#ff0000; }
+        .related-scroll { display:flex; overflow-x:auto; gap:10px; padding-right:14px; }
+        .related-card { min-width:140px; background:#0f0f0f; border-radius:14px; padding:8px; border:1px solid #222; cursor:pointer; flex-shrink:0; }
+        .related-card img { width:100%; height:100px; object-fit:contain; border-radius:10px; border:1px solid #333; }
+        .related-card h4 { font-size:10px; margin:6px 0 3px; font-weight:700; color:#ff0000; }
+        .related-price { font-size:12px; font-weight:700; color:#ff0000; }
+        .related-old { font-size:10px; text-decoration:line-through; color:#555; margin-left:4px; }
+        
+        .floating-bottom { position:fixed; bottom:0; left:0; width:100%; background:#0f0f0f; display:flex; gap:8px; padding:8px 14px; border-top:2px solid #ff0000; z-index:200; }
+        .btn-buy { background:#ff0000; color:#fff; border:none; flex:1; padding:10px 0; border-radius:30px; font-weight:900; font-size:14px; cursor:pointer; }
+        .btn-cart { background:#1a0000; color:#ff0000; border:1px solid #ff0000; flex:1; padding:10px 0; border-radius:30px; font-weight:900; font-size:14px; cursor:pointer; }
+        .btn-chat { background:#25d366; color:#fff; border:none; width:44px; border-radius:30px; cursor:pointer; font-size:20px; }
+        
+        .toast-msg { position:fixed; bottom:80px; left:16px; right:16px; background:#ff0000; color:#fff; text-align:center; padding:10px; border-radius:25px; font-size:13px; z-index:300; opacity:0; pointer-events:none; font-weight:700; transition:0.2s; }
+        .toast-msg.show { opacity:1; }
+        
+        .close-cross-btn { background:#ff0000; border:none; width:36px; height:36px; border-radius:50%; font-size:20px; font-weight:700; color:#fff; cursor:pointer; margin-left:auto; flex-shrink:0; }
+        
+        .cart-view { display:none; background:#0a0a0a; min-height:100vh; padding-bottom:20px; }
+        .cart-header { background:#111; padding:14px; display:flex; align-items:center; gap:10px; position:sticky; top:0; z-index:99; border-bottom:2px solid #ff0000; }
+        .cart-back-btn { background:none; border:none; font-size:22px; cursor:pointer; color:#ff0000; flex-shrink:0; }
+        .cart-title { font-size:18px; font-weight:900; flex:1; color:#ff0000; }
+        .cart-items-container { padding:14px; display:flex; flex-direction:column; gap:12px; }
+        .cart-item-card { background:#111; border-radius:16px; padding:10px; display:flex; gap:10px; align-items:center; border:1px solid #222; }
+        .cart-item-checkbox { width:20px; height:20px; cursor:pointer; accent-color:#ff0000; flex-shrink:0; }
+        .cart-item-img { width:70px; height:70px; object-fit:cover; border-radius:10px; flex-shrink:0; border:1px solid #333; }
+        .cart-item-details { flex:1; min-width:0; }
+        .cart-item-name { font-weight:800; font-size:12px; margin-bottom:4px; color:#ff0000; }
+        .cart-item-price { color:#ff0000; font-weight:800; font-size:14px; margin-bottom:6px; }
+        .cart-quantity-control { display:flex; align-items:center; gap:10px; margin-top:6px; }
+        .qty-btn { background:#1a0000; border:1px solid #ff0000; width:24px; height:24px; border-radius:6px; font-size:16px; font-weight:700; cursor:pointer; color:#ff0000; }
+        .qty-value { font-weight:700; min-width:20px; text-align:center; color:#ff0000; }
+        .cart-item-total { font-weight:700; color:#ff0000; font-size:13px; margin-top:4px; }
+        .remove-item-btn { background:none; border:none; font-size:18px; cursor:pointer; color:#ff0000; padding:0 5px; }
+        .cart-summary { background:#111; margin:14px; padding:18px; border-radius:20px; border:1px solid #222; }
+        .summary-row { display:flex; justify-content:space-between; margin-bottom:10px; font-size:13px; color:#ccc; }
+        .summary-total { font-weight:900; font-size:16px; color:#ff0000; border-top:1px solid #222; padding-top:10px; margin-top:8px; }
+        .checkout-btn { background:#ff0000; color:#fff; width:100%; padding:12px; border:none; border-radius:35px; font-weight:900; font-size:15px; margin-top:14px; cursor:pointer; }
+        .empty-cart { text-align:center; padding:50px 20px; background:#111; border-radius:20px; margin:14px; color:#ff0000; border:1px solid #222; }
+        .select-all-container { padding:10px 14px; background:#111; margin:0 14px 14px 14px; border-radius:14px; border:1px solid #222; }
+        .select-all-label { display:flex; align-items:center; gap:10px; cursor:pointer; color:#ff0000; font-weight:700; font-size:13px; }
+        .selected-item-highlight { background:#1a0000!important; border-left:3px solid #ff0000; }
+        
+        .orders-view { display:none; background:#0a0a0a; min-height:100vh; padding-bottom:20px; }
+        .orders-header { background:#111; padding:14px; display:flex; align-items:center; gap:10px; position:sticky; top:0; z-index:99; border-bottom:2px solid #ff0000; }
+        .orders-back-btn { background:none; border:none; font-size:22px; cursor:pointer; color:#ff0000; flex-shrink:0; }
+        .orders-title { font-size:18px; font-weight:900; flex:1; color:#ff0000; }
+        .order-card { background:#111; margin:14px; padding:14px; border-radius:16px; border:1px solid #222; }
+        .order-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; padding-bottom:10px; border-bottom:1px solid #222; }
+        .order-id { font-weight:800; color:#ff0000; font-size:13px; }
+        .order-status { padding:3px 10px; border-radius:15px; font-size:10px; font-weight:700; }
+        .status-pending { background:#1a0f00; color:#ff8800; border:1px solid #ff8800; }
+        .status-confirmed { background:#001a00; color:#00ff00; border:1px solid #00ff00; }
+        .status-shipped { background:#001a33; color:#00aaff; border:1px solid #00aaff; }
+        .status-cancelled { background:#1a0000; color:#ff0000; border:1px solid #ff0000; }
+        .order-item { display:flex; gap:10px; margin-bottom:8px; align-items:center; }
+        .order-item-img { width:55px; height:55px; object-fit:cover; border-radius:10px; flex-shrink:0; border:1px solid #333; }
+        .order-item-details { flex:1; }
+        .order-item-name { font-weight:700; font-size:12px; color:#ff0000; }
+        .order-item-qty { font-size:11px; color:#888; }
+        .order-total { text-align:right; font-weight:900; color:#ff0000; font-size:16px; margin-top:10px; padding-top:10px; border-top:1px solid #222; }
+        .order-date { font-size:11px; color:#888; margin-top:3px; }
+        .empty-orders { text-align:center; padding:50px 20px; background:#111; border-radius:20px; margin:14px; color:#ff0000; border:1px solid #222; }
+        .order-actions { display:flex; gap:6px; margin-top:10px; }
+        .btn-cancel-order { flex:1; padding:6px; border-radius:6px; font-size:10px; font-weight:700; cursor:pointer; background:#1a0000; color:#ff0000; border:1px solid #ff0000; }
+        
+        .delivery-box {
+            background:linear-gradient(135deg, #001a00, #000a00);
+            border:2px solid #00ff00;
+            border-radius:12px;
+            padding:14px;
+            margin-top:10px;
+            animation:deliveryGlow 2s infinite alternate;
+        }
+        @keyframes deliveryGlow {
+            0% { box-shadow:0 0 10px rgba(0,255,0,0.3); }
+            100% { box-shadow:0 0 25px rgba(0,255,0,0.6); }
+        }
+        .delivery-box h4 { color:#00ff00; font-size:14px; font-weight:900; margin-bottom:8px; display:flex; align-items:center; gap:6px; }
+        .delivery-link { display:block; background:#000; padding:10px; border-radius:8px; color:#00ff00; font-size:12px; word-break:break-all; margin-bottom:8px; border:1px solid #003300; text-decoration:none; }
+        .delivery-key { background:#000; padding:8px 12px; border-radius:8px; color:#ffd700; font-weight:700; font-size:14px; text-align:center; border:1px solid #332200; margin-bottom:6px; }
+        .delivery-note { font-size:11px; color:#88aa88; margin-top:6px; font-style:italic; }
+        .copy-delivery-btn { background:#00ff00; color:#000; border:none; padding:6px 12px; border-radius:6px; font-weight:700; font-size:10px; cursor:pointer; margin-top:6px; }
+        
+        .payment-modal { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); z-index:400; align-items:center; justify-content:center; }
+        .payment-modal.show { display:flex; }
+        .payment-card { background:#111; width:90%; max-width:380px; border-radius:20px; padding:20px; max-height:85vh; overflow-y:auto; border:2px solid #ff0000; }
+        .payment-title { font-size:20px; font-weight:900; margin-bottom:18px; text-align:center; color:#ff0000; }
+        .payment-method { background:#1a0000; padding:14px; border-radius:14px; margin-bottom:18px; display:flex; align-items:center; gap:10px; border:2px solid #ff0000; }
+        .payment-method-icon { background:#ff0000; color:#fff; width:44px; height:44px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:22px; font-weight:900; flex-shrink:0; }
+        .payment-method-info { flex:1; }
+        .payment-method-name { font-weight:900; font-size:16px; color:#ff0000; }
+        .payment-method-number { font-size:13px; color:#888; margin-top:3px; }
+        .form-group { margin-bottom:14px; }
+        .form-label { display:block; font-weight:700; margin-bottom:6px; color:#ff0000; font-size:12px; }
+        .form-input { width:100%; padding:10px; border:1px solid #330000; background:#0a0a0a; border-radius:10px; font-size:14px; color:#ff0000; outline:none; }
+        .form-input:focus { border-color:#ff0000; }
+        .form-input::placeholder { color:#550000; }
+        .payment-amount { background:#1a0000; padding:14px; border-radius:14px; text-align:center; margin-bottom:18px; border:2px solid #ff0000; }
+        .payment-amount-label { font-size:13px; color:#888; }
+        .payment-amount-value { font-size:28px; font-weight:900; color:#ff0000; margin-top:4px; }
+        .confirm-payment-btn { background:#ff0000; color:#fff; width:100%; padding:12px; border:none; border-radius:35px; font-weight:900; font-size:15px; cursor:pointer; margin-top:6px; }
+        .cancel-payment-btn { background:transparent; color:#ff0000; width:100%; padding:12px; border:1px solid #ff0000; border-radius:35px; font-weight:900; font-size:15px; cursor:pointer; margin-top:6px; }
+        .copy-btn { background:#ff0000; color:#fff; border:none; padding:5px 12px; border-radius:6px; cursor:pointer; font-size:10px; margin-left:6px; font-weight:700; }
+        .or-divider { display:flex; align-items:center; gap:8px; margin:18px 0; color:#ff0000; font-size:12px; font-weight:700; }
+        .or-divider::before,.or-divider::after { content:''; flex:1; height:1px; background:#330000; }
+        .pending-notice { background:#1a0f00; border:1px solid #ff8800; border-radius:10px; padding:10px; margin:14px 0; display:flex; gap:8px; align-items:start; }
+        .pending-notice-icon { font-size:18px; flex-shrink:0; }
+        .pending-notice-text { font-size:12px; color:#ff8800; line-height:1.3; }
+    </style>
+</head>
+<body>
+
+<div class="sync-status sync-offline" id="syncStatus">🔴 OFFLINE</div>
+
+<!-- HOME VIEW -->
+<div id="homeView">
+    <div class="header">
+        <div class="logo">HACKER<span>SHOP</span>BD</div>
+        <div class="search-box-container">
+            <input type="text" class="search-input" id="searchInput" placeholder="🔍 Search panels...">
+            <span class="search-icon-right" id="searchIcon">⌨️</span>
+        </div>
+    </div>
+    <div class="categories">
+        <div class="cat active" data-cat="all">💀 ALL</div>
+        <div class="cat" data-cat="location">📍 LOCATION</div>
+        <div class="cat" data-cat="headshot">🎯 HEADSHOT</div>
+    </div>
+    <div class="products" id="productContainer"></div>
+    <div class="bottom-nav">
+        <div class="nav-item active" data-nav="home"><span class="nav-icon">💀</span><span>STORE</span></div>
+        <div class="nav-item" data-nav="orders"><span class="nav-icon">📋</span><span>ORDERS</span></div>
+        <div class="nav-item" data-nav="cart"><span class="nav-icon">🛒<span id="cartCountBadge" class="cart-badge" style="display:none;">0</span></span><span>CART</span></div>
+        <div class="nav-item" data-nav="support"><span class="nav-icon">💬</span><span>SUPPORT</span></div>
+    </div>
+</div>
+
+<!-- DETAIL VIEW -->
+<div id="detailView" class="detail-view">
+    <div class="header">
+        <div class="logo">HACKER<span>SHOP</span>BD</div>
+        <button class="close-cross-btn" id="closeDetailCrossBtn">✖</button>
+    </div>
+    <div class="slider-container">
+        <img class="slider-main" id="mainImage" src="" alt="Panel">
+        <button class="slider-btn prev" id="prevBtn">◄</button>
+        <button class="slider-btn next" id="nextBtn">►</button>
+    </div>
+    <div class="thumbnails" id="thumbnailsContainer"></div>
+    <div class="info-card">
+        <h1 class="product-title" id="productTitle"></h1>
+        <div class="price-section">
+            <span class="old-price" id="oldPrice"></span>
+            <span class="current-price" id="currentPrice"></span>
+            <span class="save-badge" id="saveBadge"></span>
+            <span class="free-delivery-badge">🚚 FREE DELIVERY</span>
+        </div>
+        <div class="rating"><span class="stars">★★★★★</span> <span id="reviewCount" style="color:#888;font-size:12px;"></span></div>
+    </div>
+    <div class="section"><div class="section-title">🔥 FEATURES</div><ul class="spec-list" id="specialtyList"></ul></div>
+    <div class="section"><div class="section-title">⚡ BENEFITS</div><ul class="highlight-list" id="highlightsList"></ul></div>
+    <div class="section"><div class="section-title">📄 INFO</div><div class="desc-text" id="productDescription"></div></div>
+    <div class="section"><div class="section-title">💬 REVIEWS</div><div id="reviewsContainer"></div></div>
+    <div class="related-section"><div class="related-title">🔗 MORE PANELS</div><div class="related-scroll" id="relatedProductsList"></div></div>
+    <div class="floating-bottom">
+        <button class="btn-chat" id="chatBtn">💬</button>
+        <button class="btn-buy" id="buyNowBtn">💀 BUY</button>
+        <button class="btn-cart" id="addToCartBtn">🛒 ADD</button>
+    </div>
+</div>
+
+<!-- CART VIEW -->
+<div id="cartView" class="cart-view">
+    <div class="cart-header">
+        <button class="cart-back-btn" id="cartBackBtn">◄</button>
+        <div class="cart-title">🛒 MY CART</div>
+        <div style="width:32px;"></div>
+    </div>
+    <div class="select-all-container" id="selectAllContainer" style="display:none;">
+        <label class="select-all-label">
+            <input type="checkbox" id="selectAllCheckbox" style="width:18px;height:18px;cursor:pointer;">
+            <span>SELECT ALL</span>
+        </label>
+    </div>
+    <div id="cartItemsList" class="cart-items-container"></div>
+    <div id="cartSummary" class="cart-summary" style="display:none;"></div>
+</div>
+
+<!-- ORDERS VIEW -->
+<div id="ordersView" class="orders-view">
+    <div class="orders-header">
+        <button class="orders-back-btn" id="ordersBackBtn">◄</button>
+        <div class="orders-title">📋 MY ORDERS</div>
+        <div style="width:32px;"></div>
+    </div>
+    <div id="ordersList"></div>
+</div>
+
+<!-- PAYMENT MODAL -->
+<div id="paymentModal" class="payment-modal">
+    <div class="payment-card">
+        <div class="payment-title">💳 PAYMENT</div>
+        <div class="payment-method">
+            <div class="payment-method-icon">B</div>
+            <div class="payment-method-info">
+                <div class="payment-method-name">bKash Send Money</div>
+                <div class="payment-method-number">
+                    <strong style="color:#ff0000;">01782871180</strong>
+                    <button class="copy-btn" id="copyBkashBtn">📋 COPY</button>
+                </div>
+            </div>
+        </div>
+        <div class="payment-amount">
+            <div class="payment-amount-label">TOTAL AMOUNT</div>
+            <div class="payment-amount-value" id="paymentAmount">৳0</div>
+            <div class="free-delivery-badge" style="margin-top:8px;font-size:11px;">🚚 FREE DELIVERY</div>
+        </div>
+        <div class="pending-notice">
+            <div class="pending-notice-icon">⚠️</div>
+            <div class="pending-notice-text"><strong>পেমেন্ট করে নিচের যেকোনো একটি দিন:</strong><br>TrxID অথবা আপনার bKash নাম্বারের শেষ 4 ডিজিট</div>
+        </div>
+        <div class="form-group">
+            <label class="form-label">🔑 bKash TrxID</label>
+            <input type="text" class="form-input" id="transactionId" placeholder="TRX দিয়ে শুরু হওয়া ID...">
+        </div>
+        <div class="or-divider">⚡ অথবা ⚡</div>
+        <div class="form-group">
+            <label class="form-label">🔢 bKash শেষের ৪ ডিজিট</label>
+            <input type="text" class="form-input" id="lastFourDigits" placeholder="আপনার bKash নাম্বারের শেষ ৪ ডিজিট" maxlength="4">
+        </div>
+        <p style="font-size:10px;color:#888;text-align:center;margin-bottom:12px;">⚠️ উপরের যেকোনো একটি তথ্য দিন। অর্ডার পেন্ডিং থাকবে।</p>
+        <button class="confirm-payment-btn" id="confirmPaymentBtn">💀 অর্ডার কনফার্ম</button>
+        <button class="cancel-payment-btn" id="cancelPaymentBtn">❌ বাতিল</button>
+    </div>
+</div>
+
+<div id="toastMsg" class="toast-msg"></div>
+
+<script>
+    // ============ FIREBASE CONFIG ============
+    const firebaseConfig = {
+        apiKey: "AIzaSyCkzJbuVZxHccDzD-BQWyWAAe-W7FBe2kY",
+        authDomain: "hackershopbd-7f0e9.firebaseapp.com",
+        databaseURL: "https://hackershopbd-7f0e9-default-rtdb.asia-southeast1.firebasedatabase.app",
+        projectId: "hackershopbd-7f0e9",
+        storageBucket: "hackershopbd-7f0e9.firebasestorage.app",
+        messagingSenderId: "635135394579",
+        appId: "1:635135394579:web:ea90e7ef3884d0ab0010e6"
+    };
+    
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+    
+    // ============ BKASH NUMBER ============
+    const BKASH_NUMBER = '01782871180';
+    const DELIVERY_FEE = 0; // FREE DELIVERY
+    
+    // ============ DATA ============
+    let productsDB = {};
+    let cart = {};
+    let orders = [];
+    let selectedItems = new Set();
+    let currentPaymentData = null;
+    let currentProductDetail = null;
+    let currentImageIndex = 0;
+    let currentDetailImages = [];
+    
+    // ============ SYNC STATUS ============
+    function updateSyncStatus(online) {
+        const el = document.getElementById('syncStatus');
+        el.textContent = online ? '🟢 ONLINE' : '🔴 OFFLINE';
+        el.className = 'sync-status ' + (online ? 'sync-online' : 'sync-offline');
+    }
+    
+    firebase.database().ref('.info/connected').on('value', (snap) => {
+        updateSyncStatus(snap.val() === true);
+    });
+    
+    // ============ FIREBASE OPERATIONS ============
+    function loadProductsFromFB() {
+        db.ref('products').on('value', (snap) => {
+            const data = snap.val();
+            if(data) {
+                productsDB = data;
+                renderProducts(Object.values(productsDB));
+                console.log('📦 Products loaded:', Object.keys(productsDB).length);
+            } else {
+                productsDB = {
+                    1: { id:1, name:"📍 LOCATION PANEL PRO V5", oldPrice:1590, currentPrice:1290, save:300, category:"location", image:"https://images.unsplash.com/photo-1542751371-adc38448a05e?w=400", images:["https://images.unsplash.com/photo-1542751371-adc38448a05e?w=400"], desc:"Best Location Panel for Free Fire. See enemy locations in real-time.", specialty:["Real-time enemy location","Map radar hack","See all players"], highlights:["Anti-Ban Protected","Works on all devices","Lifetime updates"], reviews:[{name:"PRO_FF",rating:5,text:"Best location panel! 🔥"}] },
+                    2: { id:2, name:"🎯 HEADSHOT PANEL X9", oldPrice:2500, currentPrice:1990, save:510, category:"headshot", image:"https://images.unsplash.com/photo-1552820728-8b83bb6b2cf7?w=400", images:["https://images.unsplash.com/photo-1552820728-8b83bb6b2cf7?w=400"], desc:"100% Headshot Panel. Auto aim to head. One tap kill.", specialty:["Auto headshot lock","One tap kill","No recoil"], highlights:["100% Accuracy","Undetectable","Works on all guns"], reviews:[{name:"HEADSHOT_KING",rating:5,text:"Every shot is headshot! 😈"}] },
+                    3: { id:3, name:"📍 GHOST LOCATION PANEL", oldPrice:3000, currentPrice:2490, save:510, category:"location", image:"https://images.unsplash.com/photo-1538481199705-c710c4e965fc?w=400", images:["https://images.unsplash.com/photo-1538481199705-c710c4e965fc?w=400"], desc:"Advanced location panel with ESP box, health, distance.", specialty:["ESP Box hack","Health indicator","Distance meter"], highlights:["Customizable ESP","Safe to use","24/7 support"], reviews:[] },
+                    4: { id:4, name:"🎯 AIMBOT HEADSHOT PRO", oldPrice:4000, currentPrice:3490, save:510, category:"headshot", image:"https://images.unsplash.com/photo-1542751371-adc38448a05e?w=400", images:["https://images.unsplash.com/photo-1542751371-adc38448a05e?w=400"], desc:"Ultimate aimbot with headshot guarantee. Adjustable aim speed.", specialty:["Adjustable aim speed","Custom FOV","Rank push ready"], highlights:["Silent aim","No shake","Instant kill"], reviews:[] },
+                    5: { id:5, name:"📍 RADAR HACK PANEL", oldPrice:1800, currentPrice:1490, save:310, category:"location", image:"https://images.unsplash.com/photo-1552820728-8b83bb6b2cf7?w=400", images:["https://images.unsplash.com/photo-1552820728-8b83bb6b2cf7?w=400"], desc:"Mini map radar hack with direction indicator.", specialty:["Direction indicator","Pinpoint location","Lightweight"], highlights:["No lag","Low-end devices","Daily updates"], reviews:[] },
+                    6: { id:6, name:"🎯 SNIPER HEADSHOT HACK", oldPrice:3500, currentPrice:2990, save:510, category:"headshot", image:"https://images.unsplash.com/photo-1538481199705-c710c4e965fc?w=400", images:["https://images.unsplash.com/photo-1538481199705-c710c4e965fc?w=400"], desc:"Specialized sniper headshot panel with auto scope.", specialty:["Auto scope","Long range headshot","One shot one kill"], highlights:["Perfect for snipers","Anti-shake","Scope hack"], reviews:[] }
+                };
+                db.ref('products').set(productsDB);
+                renderProducts(Object.values(productsDB));
+            }
+        });
+    }
+    
+    function loadOrdersFromFB() {
+        db.ref('orders').on('value', (snap) => {
+            const data = snap.val();
+            orders = data || [];
+            console.log('📋 Orders loaded:', orders.length);
+            if(document.getElementById('ordersView').style.display === 'block') {
+                renderOrders();
+            }
+        });
+    }
+    
+    function saveOrdersToFB() {
+        db.ref('orders').set(orders);
+    }
+    
+    // ============ LOCAL CART ============
+    function loadCart() { try { const d=localStorage.getItem('hackershop_cart'); cart=d?JSON.parse(d):{}; } catch(e){ cart={}; } updateBadge(); }
+    function saveCart() { try { localStorage.setItem('hackershop_cart',JSON.stringify(cart)); } catch(e){} }
+    function updateBadge() { const c=Object.values(cart).reduce((s,i)=>s+i.quantity,0); const b=document.getElementById('cartCountBadge'); b.textContent=c; b.style.display=c>0?'block':'none'; }
+    
+    // ============ TOAST ============
+    function toast(m) { const t=document.getElementById('toastMsg'); t.textContent=m; t.classList.add('show'); clearTimeout(toast._t); toast._t=setTimeout(()=>t.classList.remove('show'),1800); }
+    
+    // ============ NAVIGATION ============
+    function showView(v) {
+        document.getElementById('homeView').style.display='none';
+        document.getElementById('detailView').style.display='none';
+        document.getElementById('cartView').style.display='none';
+        document.getElementById('ordersView').style.display='none';
+        if(v==='home') document.getElementById('homeView').style.display='block';
+        else if(v==='detail') document.getElementById('detailView').style.display='block';
+        else if(v==='cart') { document.getElementById('cartView').style.display='block'; renderCart(); }
+        else if(v==='orders') { document.getElementById('ordersView').style.display='block'; renderOrders(); }
+        document.querySelectorAll('.nav-item').forEach((el,i)=>{ el.classList.toggle('active',{home:0,orders:1,cart:2,support:3}[v]===i); });
+    }
+    
+    // ============ PRODUCTS ============
+    function renderProducts(products) {
+        const c=document.getElementById('productContainer');
+        if(!products||!products.length){ c.innerHTML='<div class="no-results"><h3>💀 No panels found</h3></div>'; return; }
+        c.innerHTML=products.map(p=>`
+            <div class="card" onclick="openDetail(${p.id})">
+                ${p.save?'<div class="save-badge">SAVE ৳'+p.save+'</div>':''}
+                <img src="${p.image}" alt="${p.name}" loading="lazy">
+                <h3>${p.name}</h3>
+                <span class="old-price">৳${p.oldPrice}</span>
+                <div class="price-row"><span class="current-price">৳${p.currentPrice}</span><span class="discount-tag">-${Math.round((p.save/p.oldPrice)*100)}%</span></div>
+                <button class="add-cart-btn" onclick="event.stopPropagation();addToCart(${p.id})"><span>💀</span><span class="add-cart-btn-text">ADD</span></button>
+                <div style="text-align:center;margin-top:4px;"><span class="free-delivery-badge">🚚 FREE</span></div>
+            </div>
+        `).join('');
+    }
+    
+    function addToCart(pid){ const p=productsDB[pid]; if(!p)return; if(cart[pid])cart[pid].quantity++; else cart[pid]={id:p.id,name:p.name,price:p.currentPrice,quantity:1,image:p.image}; saveCart(); updateBadge(); toast('✅ Added! 🚚 Free Delivery'); }
+    function removeFromCart(pid){ delete cart[pid]; selectedItems.delete(pid); saveCart(); renderCart(); toast('Removed ❌'); }
+    function updateQty(pid,d){ if(!cart[pid])return; cart[pid].quantity+=d; if(cart[pid].quantity<=0){ delete cart[pid]; selectedItems.delete(pid); } saveCart(); renderCart(); }
+    function toggleItem(pid){ selectedItems.has(pid)?selectedItems.delete(pid):selectedItems.add(pid); renderCart(); }
+    function toggleAll(){ const ids=Object.keys(cart).map(Number); const all=ids.every(id=>selectedItems.has(id)); if(all)selectedItems.clear(); else ids.forEach(id=>selectedItems.add(id)); renderCart(); }
+    
+    function renderCart(){
+        const items=Object.values(cart);
+        if(!items.length){ document.getElementById('cartItemsList').innerHTML='<div class="empty-cart"><div style="font-size:50px;">🛒</div><h3>Cart empty</h3></div>'; document.getElementById('cartSummary').style.display='none'; document.getElementById('selectAllContainer').style.display='none'; return; }
+        document.getElementById('selectAllContainer').style.display='block';
+        document.getElementById('selectAllCheckbox').checked=items.every(i=>selectedItems.has(i.id));
+        document.getElementById('cartItemsList').innerHTML=items.map(item=>`
+            <div class="cart-item-card ${selectedItems.has(item.id)?'selected-item-highlight':''}">
+                <input type="checkbox" class="cart-item-checkbox" ${selectedItems.has(item.id)?'checked':''} onchange="toggleItem(${item.id})">
+                <img src="${item.image}" class="cart-item-img">
+                <div class="cart-item-details"><div class="cart-item-name">${item.name}</div><div class="cart-item-price">৳${item.price}</div>
+                    <div class="cart-quantity-control"><button class="qty-btn" onclick="updateQty(${item.id},-1)">−</button><span class="qty-value">${item.quantity}</span><button class="qty-btn" onclick="updateQty(${item.id},1)">+</button></div>
+                    <div class="cart-item-total">Total: ৳${item.price*item.quantity}</div></div>
+                <button class="remove-item-btn" onclick="removeFromCart(${item.id})">🗑</button>
+            </div>
+        `).join('');
+        const sel=items.filter(i=>selectedItems.has(i.id)); const sub=sel.reduce((s,i)=>s+i.price*i.quantity,0); const total=sub; // FREE DELIVERY
+        document.getElementById('cartSummary').style.display=sel.length?'block':'none';
+        document.getElementById('cartSummary').innerHTML=sel.length?`
+            <div class="summary-row"><span>Panels</span><span>${sel.length} items</span></div>
+            <div class="summary-row"><span>Subtotal</span><span>৳${sub}</span></div>
+            <div class="summary-row"><span>Delivery</span><span style="color:#00ff00;">🚚 FREE</span></div>
+            <div class="summary-row summary-total"><span>TOTAL</span><span>৳${total}</span></div>
+            <button class="checkout-btn" onclick="checkout()">💀 CHECKOUT (৳${total})</button>
+        `:'';
+    }
+    
+    function checkout(){
+        const items=Object.values(cart).filter(i=>selectedItems.has(i.id));
+        if(!items.length){ toast('Select panels first!'); return; }
+        const total=items.reduce((s,i)=>s+i.price*i.quantity,0); // FREE DELIVERY
+        currentPaymentData={items,total};
+        document.getElementById('paymentAmount').textContent='৳'+total;
+        document.getElementById('transactionId').value=''; document.getElementById('lastFourDigits').value='';
+        document.getElementById('paymentModal').classList.add('show');
+    }
+    
+    function confirmPayment(){
+        const tid=document.getElementById('transactionId').value.trim();
+        const l4=document.getElementById('lastFourDigits').value.trim();
+        if(!tid&&!l4){ toast('TrxID অথবা শেষের ৪ ডিজিট দিন! ⚠️'); return; }
+        if(l4&&(l4.length!==4||!/^\d{4}$/.test(l4))){ toast('সঠিক ৪ ডিজিট দিন! ⚠️'); return; }
+        if(!currentPaymentData)return;
+        const order={
+            id:'FF'+Date.now(), date:new Date().toISOString(),
+            items:currentPaymentData.items.map(i=>({id:i.id,name:i.name,price:i.price,quantity:i.quantity,image:i.image})),
+            total:currentPaymentData.total, status:'pending',
+            payment:{method:'bKash',number:BKASH_NUMBER,transactionId:tid||'N/A',lastFourDigits:l4||'N/A',verifiedBy:tid?'TrxID':'Last 4'},
+            deliveryLink:'', licenseKey:'', deliveryNote:''
+        };
+        orders.unshift(order); saveOrdersToFB();
+        currentPaymentData.items.forEach(i=>{ delete cart[i.id]; selectedItems.delete(i.id); });
+        saveCart(); updateBadge();
+        document.getElementById('paymentModal').classList.remove('show'); currentPaymentData=null;
+        toast('✅ অর্ডার সম্পন্ন! পেন্ডিং...');
+        setTimeout(()=>showView('orders'),1200);
+    }
+    
+    function cancelOrder(oid){ const idx=orders.findIndex(o=>o.id===oid); if(idx!==-1){ orders[idx].status='cancelled'; saveOrdersToFB(); renderOrders(); toast('অর্ডার বাতিল ❌'); } }
+    
+    function copyToClipboard(text){ navigator.clipboard.writeText(text).then(()=>toast('📋 কপি হয়েছে!')).catch(()=>toast('Failed')); }
+    
+    function renderOrders(){
+        if(!orders.length){ document.getElementById('ordersList').innerHTML='<div class="empty-orders"><div style="font-size:50px;">📋</div><h3>কোনো অর্ডার নেই</h3></div>'; return; }
+        document.getElementById('ordersList').innerHTML=orders.map(o=>{
+            const st={pending:'⏳ পেন্ডিং',confirmed:'✅ কনফার্ম',shipped:'🚚 ডেলিভারি',delivered:'📦 সম্পন্ন',cancelled:'❌ বাতিল'}[o.status]||o.status.toUpperCase();
+            let html=`<div class="order-card"><div class="order-header"><div><div class="order-id">#${o.id}</div><div class="order-date">${new Date(o.date).toLocaleString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}</div></div><span class="order-status status-${o.status}">${st}</span></div>`;
+            for(const item of o.items){ html+=`<div class="order-item"><img src="${item.image}" class="order-item-img"><div class="order-item-details"><div class="order-item-name">${item.name}</div><div class="order-item-qty">Qty: ${item.quantity} x ৳${item.price}</div></div><div style="color:#ff0000;font-weight:700;">৳${item.price*item.quantity}</div></div>`; }
+            html+=`<div class="order-total">TOTAL: ৳${o.total} <span class="free-delivery-badge" style="font-size:9px;">🚚 FREE</span></div>`;
+            if(o.payment){ html+=`<div style="margin-top:6px;font-size:10px;color:#888;">💳 bKash (${BKASH_NUMBER}) | ${o.payment.transactionId!=='N/A'?'TrxID: '+o.payment.transactionId:'Last 4: '+o.payment.lastFourDigits}</div>`; }
+            if((o.status==='shipped'||o.status==='delivered')&&(o.deliveryLink||o.licenseKey)){
+                html+=`<div class="delivery-box"><h4>🔗 আপনার প্যানেল</h4>`;
+                if(o.deliveryLink){ html+=`<a href="${o.deliveryLink}" target="_blank" class="delivery-link">🔗 ${o.deliveryLink}</a><button class="copy-delivery-btn" onclick="copyToClipboard('${o.deliveryLink.replace(/'/g,"\\'")}')">📋 লিংক কপি</button>`; }
+                if(o.licenseKey){ html+=`<div class="delivery-key">🔑 LICENSE: ${o.licenseKey}</div><button class="copy-delivery-btn" onclick="copyToClipboard('${o.licenseKey.replace(/'/g,"\\'")}')">📋 কী কপি</button>`; }
+                if(o.deliveryNote){ html+=`<div class="delivery-note">📝 ${o.deliveryNote}</div>`; }
+                html+=`</div>`;
+            }
+            if(o.status==='pending'){ html+=`<div class="order-actions"><button class="btn-cancel-order" onclick="cancelOrder('${o.id}')">❌ বাতিল</button></div>`; }
+            return html+'</div>';
+        }).join('');
+    }
+    
+    function openDetail(pid){
+        const p=productsDB[pid]; if(!p)return;
+        currentProductDetail=p; currentDetailImages=p.images||[p.image]; currentImageIndex=0;
+        document.getElementById('mainImage').src=currentDetailImages[0];
+        document.getElementById('productTitle').textContent=p.name;
+        document.getElementById('oldPrice').textContent='৳'+p.oldPrice;
+        document.getElementById('currentPrice').textContent='৳'+p.currentPrice;
+        document.getElementById('saveBadge').textContent='SAVE ৳'+p.save;
+        document.getElementById('productDescription').textContent=p.desc||'';
+        document.getElementById('reviewCount').textContent='('+(p.reviews||[]).length+' reviews)';
+        document.getElementById('thumbnailsContainer').innerHTML=currentDetailImages.map((img,i)=>`<img src="${img}" class="thumb ${i===0?'active':''}" onclick="changeImg(${i})">`).join('');
+        document.getElementById('specialtyList').innerHTML=(p.specialty||[]).map(s=>`<li>${s}</li>`).join('');
+        document.getElementById('highlightsList').innerHTML=(p.highlights||[]).map(h=>`<li>${h}</li>`).join('');
+        document.getElementById('reviewsContainer').innerHTML=(p.reviews||[]).length?(p.reviews||[]).map(r=>`<div class="review-item"><div class="reviewer">${r.name} - ${'⭐'.repeat(r.rating)}</div><div class="review-text">${r.text}</div></div>`).join(''):'<p style="color:#888;">No reviews yet</p>';
+        const related=Object.values(productsDB).filter(rp=>rp.id!==p.id).slice(0,4);
+        document.getElementById('relatedProductsList').innerHTML=related.map(rp=>`<div class="related-card" onclick="openDetail(${rp.id})"><img src="${rp.image}"><h4>${rp.name}</h4><span class="related-price">৳${rp.currentPrice}</span><span class="related-old">৳${rp.oldPrice}</span></div>`).join('');
+        showView('detail');
+    }
+    
+    function changeImg(i){ currentImageIndex=i; document.getElementById('mainImage').src=currentDetailImages[i]; document.querySelectorAll('.thumb').forEach((t,idx)=>t.classList.toggle('active',idx===i)); }
+    function buyNow(){ if(currentProductDetail){ addToCart(currentProductDetail.id); selectedItems.add(currentProductDetail.id); showView('cart'); setTimeout(checkout,400); } }
+    
+    function search(){
+        const term=document.getElementById('searchInput').value.toLowerCase().trim();
+        const cat=document.querySelector('.cat.active')?.dataset?.cat||'all';
+        let filtered=Object.values(productsDB);
+        if(cat!=='all')filtered=filtered.filter(p=>p.category===cat);
+        if(term)filtered=filtered.filter(p=>p.name.toLowerCase().includes(term));
+        renderProducts(filtered);
+    }
+    
+    function setupEvents(){
+        document.querySelectorAll('.cat').forEach(c=>c.addEventListener('click',function(){ document.querySelectorAll('.cat').forEach(x=>x.classList.remove('active')); this.classList.add('active'); search(); }));
+        document.getElementById('searchInput').addEventListener('input',search);
+        document.getElementById('searchIcon').addEventListener('click',search);
+        document.getElementById('prevBtn').addEventListener('click',()=>{ if(currentDetailImages.length){ currentImageIndex=(currentImageIndex-1+currentDetailImages.length)%currentDetailImages.length; changeImg(currentImageIndex); } });
+        document.getElementById('nextBtn').addEventListener('click',()=>{ if(currentDetailImages.length){ currentImageIndex=(currentImageIndex+1)%currentDetailImages.length; changeImg(currentImageIndex); } });
+        document.getElementById('closeDetailCrossBtn').addEventListener('click',()=>showView('home'));
+        document.getElementById('addToCartBtn').addEventListener('click',()=>{ if(currentProductDetail)addToCart(currentProductDetail.id); });
+        document.getElementById('buyNowBtn').addEventListener('click',buyNow);
+        document.getElementById('cartBackBtn').addEventListener('click',()=>showView('home'));
+        document.getElementById('selectAllCheckbox').addEventListener('change',toggleAll);
+        document.getElementById('ordersBackBtn').addEventListener('click',()=>showView('home'));
+        document.getElementById('confirmPaymentBtn').addEventListener('click',confirmPayment);
+        document.getElementById('cancelPaymentBtn').addEventListener('click',()=>{ document.getElementById('paymentModal').classList.remove('show'); currentPaymentData=null; });
+        document.getElementById('copyBkashBtn').addEventListener('click',()=>{ navigator.clipboard.writeText(BKASH_NUMBER).then(()=>toast('📋 নাম্বার কপি হয়েছে!')).catch(()=>{}); });
+        document.getElementById('paymentModal').addEventListener('click',function(e){ if(e.target===this){ this.classList.remove('show'); currentPaymentData=null; } });
+        document.querySelectorAll('.nav-item').forEach(item=>item.addEventListener('click',function(){ const nav=this.dataset.nav; if(nav==='home')showView('home'); else if(nav==='cart')showView('cart'); else if(nav==='orders')showView('orders'); else if(nav==='support')toast('Support: @hackershopbd 💬'); }));
+    }
+    
+    // ============ INIT ============
+    function init(){ loadCart(); loadProductsFromFB(); loadOrdersFromFB(); setupEvents(); }
+    window.addEventListener('DOMContentLoaded',init);
+</script>
+</body>
+</html>

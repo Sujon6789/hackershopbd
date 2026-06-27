@@ -1,0 +1,808 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>🔥 ADMIN PANEL - HACKER SHOP BD</title>
+    
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+    
+    <style>
+        :root {
+            --bg: #0a0a0a;
+            --card: #111;
+            --red: #ff0000;
+            --gold: #ffd700;
+            --green: #00ff00;
+            --blue: #0088ff;
+            --orange: #ff6600;
+        }
+        * { margin:0; padding:0; box-sizing:border-box; font-family:'Segoe UI',system-ui,sans-serif; }
+        body { background:var(--bg); color:#fff; min-height:100vh; -webkit-text-size-adjust:100%; }
+        
+        .matrix-bg {
+            position:fixed; top:0; left:0; width:100%; height:100%;
+            pointer-events:none; z-index:0; opacity:0.03;
+            background: repeating-linear-gradient(0deg, transparent, transparent 2px, #0f0 2px, #0f0 4px);
+            animation: matrix 20s linear infinite;
+        }
+        @keyframes matrix { 0% { background-position:0 0; } 100% { background-position:0 100px; } }
+        
+        .container { max-width:1400px; margin:0 auto; padding:15px; position:relative; z-index:1; }
+        
+        .sync-status {
+            position:fixed; top:8px; right:8px; z-index:500; font-size:9px; padding:3px 8px;
+            border-radius:10px; font-weight:700; letter-spacing:0.5px;
+        }
+        .sync-online { background:#003300; color:#00ff00; border:1px solid #00ff00; }
+        .sync-offline { background:#330000; color:#ff0000; border:1px solid #ff0000; animation:blink 1s infinite; }
+        @keyframes blink { 0%,100% { opacity:1; } 50% { opacity:0.5; } }
+        
+        .admin-header {
+            background:linear-gradient(135deg, #000, #111);
+            padding:15px 20px; border-radius:16px; border:2px solid var(--red);
+            margin-bottom:15px; display:flex; align-items:center; justify-content:space-between;
+            flex-wrap:wrap; gap:12px; box-shadow:0 0 30px rgba(255,0,0,0.2);
+        }
+        .admin-logo { font-size:22px; font-weight:900; color:var(--red); text-shadow:0 0 20px var(--red); letter-spacing:2px; }
+        .admin-logo span { color:var(--orange); }
+        .admin-status { display:flex; gap:15px; align-items:center; flex-wrap:wrap; }
+        .status-dot { width:12px; height:12px; border-radius:50%; background:var(--green); animation:pulse 1.5s infinite; }
+        @keyframes pulse { 0%,100% { box-shadow:0 0 5px var(--green); } 50% { box-shadow:0 0 20px var(--green), 0 0 40px var(--green); } }
+        .status-text { font-size:13px; color:#888; }
+        
+        .stats-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(180px,1fr)); gap:12px; margin-bottom:15px; }
+        .stat-card {
+            background:var(--card); padding:18px; border-radius:14px; border:1px solid #222;
+            position:relative; overflow:hidden; cursor:pointer; transition:0.2s;
+        }
+        .stat-card:hover { border-color:var(--red); transform:translateY(-2px); }
+        .stat-card::before { content:''; position:absolute; top:0; right:0; width:60px; height:60px; background:var(--red); opacity:0.1; border-radius:0 0 0 60px; }
+        .stat-icon { font-size:28px; margin-bottom:8px; }
+        .stat-value { font-size:28px; font-weight:900; color:var(--red); }
+        .stat-label { font-size:12px; color:#888; text-transform:uppercase; letter-spacing:1px; }
+        .stat-card.month-card { border-left:3px solid var(--gold); }
+        .stat-card.month-card .stat-value { color:var(--gold); }
+        
+        .main-grid { display:grid; grid-template-columns:1fr 350px; gap:15px; }
+        @media(max-width:900px) { .main-grid { grid-template-columns:1fr; } }
+        
+        .panel { background:var(--card); border-radius:16px; border:1px solid #222; padding:18px; margin-bottom:15px; }
+        .panel-title {
+            font-size:16px; font-weight:900; color:var(--red); margin-bottom:15px;
+            display:flex; align-items:center; gap:8px; text-transform:uppercase; letter-spacing:1px;
+        }
+        .panel-title::before { content:''; width:4px; height:20px; background:var(--red); border-radius:2px; }
+        
+        .table-wrapper { overflow-x:auto; }
+        table { width:100%; border-collapse:collapse; font-size:13px; }
+        th {
+            background:#1a1a1a; padding:10px 12px; text-align:left; font-weight:700;
+            color:var(--red); text-transform:uppercase; font-size:11px; letter-spacing:0.5px; border-bottom:2px solid var(--red);
+        }
+        td { padding:10px 12px; border-bottom:1px solid #1a1a1a; color:#ccc; }
+        tr:hover td { background:rgba(255,0,0,0.05); }
+        
+        .btn {
+            padding:7px 14px; border:none; border-radius:8px; font-weight:700; font-size:11px;
+            cursor:pointer; text-transform:uppercase; letter-spacing:0.5px; transition:0.2s;
+            display:inline-flex; align-items:center; gap:5px;
+        }
+        .btn-action { padding:8px 12px; font-size:10px; border-radius:6px; white-space:nowrap; transition:all 0.2s; }
+        .btn-action:hover { transform:scale(1.05); box-shadow:0 0 15px rgba(255,0,0,0.3); }
+        .btn-confirm { background:#003300; color:var(--green); border:1px solid var(--green); }
+        .btn-confirm:hover { background:var(--green); color:#000; }
+        .btn-confirm.btn-action { animation:quickPulse 2s infinite; }
+        @keyframes quickPulse { 0%,100% { box-shadow:0 0 5px rgba(0,255,0,0.3); } 50% { box-shadow:0 0 15px rgba(0,255,0,0.6); } }
+        .btn-delete { background:#330000; color:var(--red); border:1px solid var(--red); }
+        .btn-delete:hover { background:var(--red); color:#fff; }
+        .btn-edit { background:#001a33; color:var(--blue); border:1px solid var(--blue); }
+        .btn-edit:hover { background:var(--blue); color:#000; }
+        .btn-add { background:var(--red); color:#fff; padding:10px 20px; font-size:13px; }
+        .btn-add:hover { background:#cc0000; }
+        .btn-refresh { background:#1a1a1a; color:var(--orange); border:1px solid var(--orange); }
+        .btn-delivery { background:#1a3300; color:var(--green); border:1px solid var(--green); }
+        .btn-delivery:hover { background:var(--green); color:#000; }
+        
+        .modal-overlay {
+            display:none; position:fixed; top:0; left:0; width:100%; height:100%;
+            background:rgba(0,0,0,0.85); z-index:1000; align-items:center; justify-content:center; backdrop-filter:blur(3px);
+        }
+        .modal-overlay.show { display:flex; }
+        .modal {
+            background:var(--card); width:90%; max-width:600px; max-height:90vh; overflow-y:auto;
+            border-radius:20px; padding:25px; border:2px solid var(--red); box-shadow:0 0 50px rgba(255,0,0,0.3);
+        }
+        .modal-title { font-size:20px; font-weight:900; color:var(--red); margin-bottom:20px; text-align:center; text-transform:uppercase; }
+        .form-group { margin-bottom:15px; }
+        .form-label { display:block; font-weight:700; margin-bottom:6px; color:var(--red); font-size:12px; text-transform:uppercase; }
+        .form-input, .form-textarea, .form-select {
+            width:100%; padding:10px 14px; border:1px solid #333; background:#0a0a0a;
+            border-radius:10px; color:#fff; font-size:14px; outline:none; transition:0.2s;
+        }
+        .form-input:focus, .form-textarea:focus, .form-select:focus { border-color:var(--red); }
+        .form-textarea { min-height:80px; resize:vertical; }
+        .form-select { cursor:pointer; }
+        .form-select option { background:#111; color:#fff; }
+        
+        .tabs { display:flex; gap:8px; margin-bottom:15px; flex-wrap:wrap; }
+        .tab {
+            padding:8px 16px; background:#1a1a1a; border:1px solid #333; border-radius:25px;
+            cursor:pointer; font-size:12px; font-weight:700; color:#888; text-transform:uppercase; transition:0.2s;
+        }
+        .tab.active { background:var(--red); color:#000; border-color:var(--red); }
+        
+        .search-bar { display:flex; gap:10px; margin-bottom:15px; flex-wrap:wrap; }
+        .search-bar input {
+            flex:1; min-width:200px; padding:10px 14px; border:1px solid #333;
+            background:#0a0a0a; border-radius:25px; color:#fff; font-size:13px; outline:none;
+        }
+        .search-bar input:focus { border-color:var(--red); }
+        
+        .sidebar-panel { background:var(--card); border-radius:16px; border:1px solid #222; padding:18px; position:sticky; top:15px; }
+        .quick-action {
+            display:block; width:100%; padding:12px; margin-bottom:8px; background:#1a1a1a;
+            border:1px solid #333; border-radius:10px; color:#fff; cursor:pointer;
+            text-align:left; font-weight:600; font-size:13px; transition:0.2s;
+        }
+        .quick-action:hover { border-color:var(--red); background:#1a0000; }
+        
+        .badge { display:inline-block; padding:3px 10px; border-radius:15px; font-size:10px; font-weight:700; text-transform:uppercase; }
+        .badge-pending { background:#1a0f00; color:var(--orange); border:1px solid var(--orange); }
+        .badge-confirmed { background:#001a00; color:var(--green); border:1px solid var(--green); }
+        .badge-cancelled { background:#1a0000; color:var(--red); border:1px solid var(--red); }
+        .badge-shipped { background:#001a33; color:var(--blue); border:1px solid var(--blue); }
+        
+        .toast {
+            position:fixed; bottom:20px; right:20px; background:var(--red); color:#fff;
+            padding:12px 20px; border-radius:30px; font-weight:700; font-size:13px;
+            z-index:2000; opacity:0; transform:translateY(20px); transition:0.3s; pointer-events:none;
+        }
+        .toast.show { opacity:1; transform:translateY(0); }
+        
+        .img-preview { width:100%; height:180px; object-fit:cover; border-radius:10px; border:1px solid #333; margin-top:8px; }
+        .flex-row { display:flex; gap:10px; flex-wrap:wrap; }
+        .flex-1 { flex:1; min-width:150px; }
+        .has-delivery { color:var(--green); }
+        .no-delivery { color:#555; }
+        .info-box { background:#0a0a0a; border:1px solid #333; border-radius:8px; padding:10px; margin-top:8px; font-size:11px; color:#888; }
+    </style>
+</head>
+<body>
+    <div class="matrix-bg"></div>
+    
+    <div class="sync-status sync-offline" id="syncStatus">🔴 OFFLINE</div>
+    
+    <div class="container">
+        <div class="admin-header">
+            <div class="admin-logo">⚡ HACKER<span>ADMIN</span> ⚡</div>
+            <div class="admin-status">
+                <div class="status-dot"></div>
+                <span class="status-text">SYSTEM ONLINE</span>
+                <span style="color:#888;">|</span>
+                <span style="color:var(--red);font-weight:700;" id="currentTime"></span>
+                <button class="btn btn-refresh" onclick="refreshAll()">🔄 REFRESH</button>
+                <button class="btn btn-delete" onclick="logout()">🚪 LOGOUT</button>
+            </div>
+        </div>
+        
+        <div class="stats-grid">
+            <div class="stat-card"><div class="stat-icon">🛒</div><div class="stat-value" id="totalOrders">0</div><div class="stat-label">Total Orders</div></div>
+            <div class="stat-card"><div class="stat-icon">⏳</div><div class="stat-value" id="pendingOrders">0</div><div class="stat-label">Pending</div></div>
+            <div class="stat-card"><div class="stat-icon">✅</div><div class="stat-value" id="confirmedOrders">0</div><div class="stat-label">Confirmed</div></div>
+            <div class="stat-card"><div class="stat-icon">💰</div><div class="stat-value" id="totalRevenue">৳0</div><div class="stat-label">Total Revenue</div></div>
+            <div class="stat-card month-card"><div class="stat-icon">📅</div><div class="stat-value" id="monthRevenue">৳0</div><div class="stat-label">Month Revenue</div></div>
+            <div class="stat-card"><div class="stat-icon">📦</div><div class="stat-value" id="totalProducts">0</div><div class="stat-label">Products</div></div>
+        </div>
+        
+        <div class="main-grid">
+            <div>
+                <div class="tabs">
+                    <div class="tab active" data-tab="orders">📋 Orders</div>
+                    <div class="tab" data-tab="products">📦 Products</div>
+                    <div class="tab" data-tab="settings">⚙️ Settings</div>
+                </div>
+                
+                <div class="panel" id="tab-orders">
+                    <div class="panel-title">📋 Order Management</div>
+                    <div class="search-bar">
+                        <input type="text" id="orderSearch" placeholder="🔍 Search by Order ID or TrxID..." oninput="filterOrders()">
+                        <select class="form-select" id="orderStatusFilter" onchange="filterOrders()" style="width:auto;">
+                            <option value="all">All Status</option>
+                            <option value="pending">⏳ Pending</option>
+                            <option value="confirmed">✅ Confirmed</option>
+                            <option value="shipped">🚚 Shipped</option>
+                            <option value="cancelled">❌ Cancelled</option>
+                        </select>
+                    </div>
+                    <div class="table-wrapper">
+                        <table>
+                            <thead><tr><th>Order ID</th><th>Date</th><th>Items</th><th>Total</th><th>Payment</th><th>Delivery</th><th>Status</th><th>Actions</th></tr></thead>
+                            <tbody id="ordersTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <div class="panel" id="tab-products" style="display:none;">
+                    <div class="panel-title">📦 Product Management</div>
+                    <div style="margin-bottom:15px;">
+                        <button class="btn btn-add" onclick="openProductModal()">➕ ADD NEW PANEL</button>
+                        <button class="btn btn-delivery" onclick="openBulkDeliveryModal()" style="margin-left:8px;">🔗 BULK DELIVERY</button>
+                    </div>
+                    <div class="search-bar">
+                        <input type="text" id="productSearch" placeholder="🔍 Search products..." oninput="filterProducts()">
+                        <select class="form-select" id="productCatFilter" onchange="filterProducts()" style="width:auto;">
+                            <option value="all">All Categories</option>
+                            <option value="location">📍 Location</option>
+                            <option value="headshot">🎯 Headshot</option>
+                        </select>
+                    </div>
+                    <div class="table-wrapper">
+                        <table>
+                            <thead><tr><th>ID</th><th>Name</th><th>Category</th><th>Price</th><th>Delivery Link</th><th>Actions</th></tr></thead>
+                            <tbody id="productsTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <div class="panel" id="tab-settings" style="display:none;">
+                    <div class="panel-title">⚙️ Shop Settings</div>
+                    <div class="form-group"><label class="form-label">Shop Name</label><input type="text" class="form-input" id="shopName" value="HACKER SHOP BD"></div>
+                    <div class="form-group"><label class="form-label">bKash Merchant Number</label><input type="text" class="form-input" id="bkashNumber" value="013XXXXXXXXX"></div>
+                    <div class="form-group"><label class="form-label">Delivery Fee (৳)</label><input type="number" class="form-input" id="deliveryFee" value="60"></div>
+                    <div class="form-group"><label class="form-label">Admin Password</label><input type="password" class="form-input" id="adminPassword" placeholder="Change password..."></div>
+                    <button class="btn btn-add" onclick="saveSettings()">💾 SAVE SETTINGS</button>
+                    <button class="btn btn-delete" onclick="clearAllData()" style="margin-left:10px;">🗑️ CLEAR ALL DATA</button>
+                </div>
+            </div>
+            
+            <div>
+                <div class="sidebar-panel">
+                    <div class="panel-title">⚡ QUICK ACTIONS</div>
+                    <button class="quick-action" onclick="confirmAllPending()">✅ Confirm All Pending</button>
+                    <button class="quick-action" onclick="exportOrders()">📥 Export Orders (CSV)</button>
+                    <button class="quick-action" onclick="openProductModal()">➕ Add New Panel</button>
+                    <button class="quick-action" onclick="refreshAll()">🔄 Refresh Data</button>
+                    
+                    <div class="panel-title" style="margin-top:20px;">📊 QUICK STATS</div>
+                    <div style="font-size:12px; color:#888; line-height:2;">
+                        <div>📍 Location: <span id="locationCount" style="color:var(--red);font-weight:700;">0</span></div>
+                        <div>🎯 Headshot: <span id="headshotCount" style="color:var(--red);font-weight:700;">0</span></div>
+                        <div>📦 Total: <span id="totalProdCount" style="color:var(--red);font-weight:700;">0</span></div>
+                        <div>💰 Today: <span id="todayRevenue" style="color:var(--green);font-weight:700;">৳0</span></div>
+                        <div>📅 Month: <span id="monthRevenueSidebar" style="color:var(--gold);font-weight:700;">৳0</span></div>
+                        <div>🔗 Delivery: <span id="withDelivery" style="color:var(--green);font-weight:700;">0</span></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Order Detail Modal -->
+    <div class="modal-overlay" id="orderDetailModal">
+        <div class="modal">
+            <div class="modal-title">📋 Order Details</div>
+            <div id="orderDetailContent"></div>
+            <div style="text-align:center;margin-top:15px;">
+                <button class="btn btn-confirm" id="modalConfirmBtn" onclick="confirmOrderFromModal()">✅ CONFIRM</button>
+                <button class="btn btn-delivery" id="modalDeliveryBtn" onclick="openDeliveryModal(currentOrderId)" style="display:none;">🔗 DELIVER</button>
+                <button class="btn btn-delete" id="modalCancelBtn" onclick="cancelOrderFromModal()">❌ CANCEL</button>
+                <button class="btn btn-refresh" onclick="closeModal('orderDetailModal')">CLOSE</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Delivery Modal -->
+    <div class="modal-overlay" id="deliveryModal">
+        <div class="modal">
+            <div class="modal-title">🔗 SEND PANEL DELIVERY</div>
+            <div style="margin-bottom:15px;padding:12px;background:#0a0a0a;border-radius:8px;">
+                <div style="font-size:12px;color:#888;">Order: <span style="color:var(--red);font-weight:700;" id="deliveryOrderId"></span></div>
+                <div style="font-size:12px;color:#888;margin-top:4px;" id="deliveryOrderItems"></div>
+            </div>
+            <div class="form-group"><label class="form-label">🔗 Panel Link</label><input type="text" class="form-input" id="deliveryLink" placeholder="https://drive.google.com/..."></div>
+            <div class="form-group"><label class="form-label">🔑 License Key</label><input type="text" class="form-input" id="deliveryKey" placeholder="LICENSE-KEY-XXXX"></div>
+            <div class="form-group"><label class="form-label">📝 Note (Optional)</label><textarea class="form-textarea" id="deliveryNote" placeholder="Instructions..."></textarea></div>
+            <div class="info-box">
+                💡 <strong>Auto-fill from Product:</strong>
+                <select class="form-select" id="autoFillProduct" onchange="autoFillDelivery()" style="margin-top:8px;"><option value="">-- Select product --</option></select>
+            </div>
+            <div style="text-align:center;margin-top:15px;">
+                <button class="btn btn-add" onclick="saveDeliveryLink()">💾 SAVE & SEND</button>
+                <button class="btn btn-refresh" onclick="closeModal('deliveryModal')">CANCEL</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Product Modal -->
+    <div class="modal-overlay" id="productModal">
+        <div class="modal">
+            <div class="modal-title" id="productModalTitle">➕ ADD NEW PANEL</div>
+            <input type="hidden" id="editProductId">
+            <div class="form-group"><label class="form-label">Panel Name *</label><input type="text" class="form-input" id="prodName" placeholder="Enter panel name..."></div>
+            <div class="flex-row">
+                <div class="flex-1 form-group"><label class="form-label">Current Price (৳) *</label><input type="number" class="form-input" id="prodPrice" placeholder="1290"></div>
+                <div class="flex-1 form-group"><label class="form-label">Old Price (৳) *</label><input type="number" class="form-input" id="prodOldPrice" placeholder="1590"></div>
+            </div>
+            <div class="form-group"><label class="form-label">Category *</label><select class="form-select" id="prodCategory"><option value="location">📍 Location Panel</option><option value="headshot">🎯 Headshot Panel</option></select></div>
+            <div class="form-group"><label class="form-label">Image URL</label><input type="text" class="form-input" id="prodImage" placeholder="https://..."><img class="img-preview" id="prodImagePreview" src="" style="display:none;"></div>
+            
+            <div style="background:#0a1a00;border:2px solid var(--green);border-radius:12px;padding:16px;margin:15px 0;">
+                <div style="font-size:14px;font-weight:900;color:var(--green);margin-bottom:12px;">🔗 DEFAULT DELIVERY SETTINGS</div>
+                <p style="font-size:10px;color:#88aa88;margin-bottom:12px;">Auto-filled when admin confirms order.</p>
+                <div class="form-group"><label class="form-label" style="color:var(--green);">Default Link</label><input type="text" class="form-input" id="prodDeliveryLink" placeholder="https://..." style="border-color:#003300;"></div>
+                <div class="form-group"><label class="form-label" style="color:var(--green);">Default License Key</label><input type="text" class="form-input" id="prodLicenseKey" placeholder="LICENSE-XXXX" style="border-color:#003300;"></div>
+                <div class="form-group"><label class="form-label" style="color:var(--green);">Default Note</label><textarea class="form-textarea" id="prodDeliveryNote" placeholder="Default instructions..." style="border-color:#003300;min-height:60px;"></textarea></div>
+            </div>
+            
+            <div class="form-group"><label class="form-label">Description</label><textarea class="form-textarea" id="prodDesc" placeholder="Panel description..."></textarea></div>
+            <div class="form-group"><label class="form-label">Features (comma separated)</label><textarea class="form-textarea" id="prodFeatures" placeholder="Feature 1, Feature 2"></textarea></div>
+            <div class="form-group"><label class="form-label">Benefits (comma separated)</label><textarea class="form-textarea" id="prodBenefits" placeholder="Benefit 1, Benefit 2"></textarea></div>
+            <div style="text-align:center;">
+                <button class="btn btn-add" id="saveProductBtn" onclick="saveProduct()">💾 SAVE PANEL</button>
+                <button class="btn btn-refresh" onclick="closeModal('productModal')">CANCEL</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Bulk Delivery Modal -->
+    <div class="modal-overlay" id="bulkDeliveryModal">
+        <div class="modal">
+            <div class="modal-title">🔗 BULK DELIVERY SETUP</div>
+            <p style="font-size:12px;color:#888;margin-bottom:15px;">Set delivery links for all products.</p>
+            <div id="bulkDeliveryContent"></div>
+            <div style="text-align:center;margin-top:15px;">
+                <button class="btn btn-add" onclick="saveBulkDelivery()">💾 SAVE ALL</button>
+                <button class="btn btn-refresh" onclick="closeModal('bulkDeliveryModal')">CANCEL</button>
+            </div>
+        </div>
+    </div>
+    
+    <div class="toast" id="toastMsg"></div>
+
+<script>
+    // ============ FIREBASE CONFIG ============
+    const firebaseConfig = {
+        apiKey: "AIzaSyCkzJbuVZxHccDzD-BQWyWAAe-W7FBe2kY",
+        authDomain: "hackershopbd-7f0e9.firebaseapp.com",
+        databaseURL: "https://hackershopbd-7f0e9-default-rtdb.asia-southeast1.firebasedatabase.app",
+        projectId: "hackershopbd-7f0e9",
+        storageBucket: "hackershopbd-7f0e9.firebasestorage.app",
+        messagingSenderId: "635135394579",
+        appId: "1:635135394579:web:ea90e7ef3884d0ab0010e6"
+    };
+    
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+    
+    let productsDB = {};
+    let orders = [];
+    let settings = { shopName:'HACKER SHOP BD', bkashNumber:'013XXXXXXXXX', deliveryFee:60, password:'admin123' };
+    let currentOrderId = null;
+    
+    // ============ SYNC STATUS ============
+    function updateSyncStatus(online) {
+        const el = document.getElementById('syncStatus');
+        el.textContent = online ? '🟢 ONLINE' : '🔴 OFFLINE';
+        el.className = 'sync-status ' + (online ? 'sync-online' : 'sync-offline');
+    }
+    firebase.database().ref('.info/connected').on('value', (snap) => updateSyncStatus(snap.val() === true));
+    
+    // ============ FIREBASE OPERATIONS ============
+    function loadProductsFromFB() {
+        db.ref('products').on('value', (snap) => {
+            const data = snap.val();
+            if(data) {
+                productsDB = data;
+                renderProductsTable();
+                updateStats();
+            }
+        });
+    }
+    
+    function saveProductsToFB() { db.ref('products').set(productsDB); }
+    
+    function loadOrdersFromFB() {
+        db.ref('orders').on('value', (snap) => {
+            const data = snap.val();
+            orders = data || [];
+            console.log('📋 Orders loaded:', orders.length);
+            renderOrdersTable();
+            updateStats();
+        });
+    }
+    
+    function saveOrdersToFB() { db.ref('orders').set(orders); }
+    
+    function loadSettingsFromFB() {
+        db.ref('settings').on('value', (snap) => {
+            const data = snap.val();
+            if(data) settings = data;
+        });
+    }
+    
+    function saveSettingsToFB() { db.ref('settings').set(settings); }
+    
+    // ============ CLOCK ============
+    function updateClock() {
+        document.getElementById('currentTime').textContent = new Date().toLocaleString('en-US', { hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:true });
+    }
+    setInterval(updateClock, 1000);
+    
+    // ============ STATS ============
+    function updateStats() {
+        const pending = orders.filter(o => o.status === 'pending');
+        const confirmed = orders.filter(o => o.status === 'confirmed' || o.status === 'shipped');
+        const totalRevenue = confirmed.reduce((s, o) => s + o.total, 0);
+        const today = new Date().toDateString();
+        const todayRevenue = orders.filter(o => (o.status === 'confirmed' || o.status === 'shipped') && new Date(o.date).toDateString() === today).reduce((s, o) => s + o.total, 0);
+        const now = new Date();
+        const monthRevenue = orders.filter(o => {
+            const d = new Date(o.date);
+            return (o.status === 'confirmed' || o.status === 'shipped') && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+        }).reduce((s, o) => s + o.total, 0);
+        const prods = Object.values(productsDB);
+        
+        document.getElementById('totalOrders').textContent = orders.length;
+        document.getElementById('pendingOrders').textContent = pending.length;
+        document.getElementById('confirmedOrders').textContent = confirmed.length;
+        document.getElementById('totalRevenue').textContent = '৳' + totalRevenue.toLocaleString();
+        document.getElementById('monthRevenue').textContent = '৳' + monthRevenue.toLocaleString();
+        document.getElementById('totalProducts').textContent = prods.length;
+        document.getElementById('locationCount').textContent = prods.filter(p => p.category === 'location').length;
+        document.getElementById('headshotCount').textContent = prods.filter(p => p.category === 'headshot').length;
+        document.getElementById('totalProdCount').textContent = prods.length;
+        document.getElementById('todayRevenue').textContent = '৳' + todayRevenue.toLocaleString();
+        document.getElementById('monthRevenueSidebar').textContent = '৳' + monthRevenue.toLocaleString();
+        document.getElementById('withDelivery').textContent = prods.filter(p => p.deliveryLink).length;
+    }
+    
+    // ============ TABS ============
+    document.querySelectorAll('.tab').forEach(tab => {
+        tab.addEventListener('click', function() {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            this.classList.add('active');
+            const tn = this.dataset.tab;
+            document.getElementById('tab-orders').style.display = tn === 'orders' ? 'block' : 'none';
+            document.getElementById('tab-products').style.display = tn === 'products' ? 'block' : 'none';
+            document.getElementById('tab-settings').style.display = tn === 'settings' ? 'block' : 'none';
+            if(tn === 'products') renderProductsTable();
+            if(tn === 'settings') loadSettingsForm();
+        });
+    });
+    
+    // ============ ORDERS ============
+    function renderOrdersTable(filtered = null) {
+        const data = filtered || orders;
+        const tbody = document.getElementById('ordersTableBody');
+        if(!data.length) { tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:30px;color:#888;">No orders found</td></tr>'; return; }
+        tbody.innerHTML = data.map(o => {
+            const bc = o.status === 'pending' ? 'badge-pending' : o.status === 'confirmed' ? 'badge-confirmed' : o.status === 'shipped' ? 'badge-shipped' : 'badge-cancelled';
+            const items = o.items.map(i => i.name.substring(0,20)).join(', ');
+            const pay = o.payment ? (o.payment.transactionId !== 'N/A' ? o.payment.transactionId : o.payment.lastFourDigits) : 'N/A';
+            const hasDel = o.deliveryLink || o.licenseKey;
+            let btns = '';
+            if(o.status === 'pending') btns = `<button class="btn btn-confirm btn-action" onclick="quickConfirm('${o.id}')">✅ CONFIRM</button><button class="btn btn-delete btn-action" onclick="quickCancel('${o.id}')">❌</button>`;
+            else if(o.status === 'confirmed') btns = `<button class="btn btn-delivery btn-action" onclick="openDeliveryModal('${o.id}')">🔗 DELIVER</button><button class="btn btn-delete btn-action" onclick="quickCancel('${o.id}')">❌</button>`;
+            else if(o.status === 'shipped') btns = `<button class="btn btn-edit btn-action" onclick="viewOrder('${o.id}')">👁️ VIEW</button><button class="btn btn-delivery btn-action" onclick="openDeliveryModal('${o.id}')">📦 EDIT</button>`;
+            else btns = `<button class="btn btn-edit btn-action" onclick="viewOrder('${o.id}')">👁️</button>`;
+            return `<tr><td style="color:var(--red);font-weight:700;">#${o.id}</td><td style="font-size:11px;">${new Date(o.date).toLocaleDateString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}</td><td style="font-size:11px;">${items}</td><td style="font-weight:700;">৳${o.total}</td><td style="font-size:11px;">${pay}</td><td>${hasDel?'<span style="color:var(--green);">🔗 Yes</span>':'<span style="color:#555;">—</span>'}</td><td><span class="badge ${bc}">${o.status.toUpperCase()}</span></td><td><div style="display:flex;gap:5px;">${btns}</div></td></tr>`;
+        }).join('');
+    }
+    
+    function filterOrders() {
+        const s = document.getElementById('orderSearch').value.toLowerCase();
+        const st = document.getElementById('orderStatusFilter').value;
+        let f = orders;
+        if(st !== 'all') f = f.filter(o => o.status === st);
+        if(s) f = f.filter(o => o.id.toLowerCase().includes(s) || (o.payment?.transactionId && o.payment.transactionId.toLowerCase().includes(s)));
+        renderOrdersTable(f);
+    }
+    
+    function viewOrder(oid) {
+        const o = orders.find(x => x.id === oid); if(!o) return;
+        currentOrderId = oid;
+        document.getElementById('orderDetailContent').innerHTML = `
+            <div style="margin-bottom:12px;"><strong>Order ID:</strong> <span style="color:var(--red);">#${o.id}</span></div>
+            <div style="margin-bottom:12px;"><strong>Date:</strong> ${new Date(o.date).toLocaleString()}</div>
+            <div style="margin-bottom:12px;"><strong>Status:</strong> <span class="badge badge-${o.status}">${o.status.toUpperCase()}</span></div>
+            <div style="margin-bottom:15px;padding:12px;background:#0a0a0a;border-radius:8px;"><strong>Items:</strong>${o.items.map(i => `<div style="margin:5px 0;font-size:12px;">• ${i.name} x${i.quantity} = ৳${i.price*i.quantity}</div>`).join('')}<div style="margin-top:8px;font-weight:900;color:var(--red);">Total: ৳${o.total}</div></div>
+            ${o.payment?`<div style="font-size:12px;color:#888;"><div>💳 bKash</div><div>🔑 TrxID: ${o.payment.transactionId}</div><div>🔢 Last 4: ${o.payment.lastFourDigits}</div></div>`:''}
+            ${(o.deliveryLink||o.licenseKey)?`<div style="margin-top:10px;padding:12px;background:#0a1a00;border:1px solid var(--green);border-radius:8px;"><strong style="color:var(--green);">🔗 Delivery:</strong>${o.deliveryLink?`<div style="font-size:11px;color:#88cc88;">Link: ${o.deliveryLink}</div>`:''}${o.licenseKey?`<div style="font-size:11px;color:#ffd700;">Key: ${o.licenseKey}</div>`:''}</div>`:''}
+        `;
+        document.getElementById('modalConfirmBtn').style.display = o.status === 'pending' ? 'inline-flex' : 'none';
+        document.getElementById('modalDeliveryBtn').style.display = o.status === 'confirmed' ? 'inline-flex' : 'none';
+        document.getElementById('modalCancelBtn').style.display = o.status !== 'cancelled' ? 'inline-flex' : 'none';
+        document.getElementById('orderDetailModal').classList.add('show');
+    }
+    
+    function quickConfirm(oid) {
+        const o = orders.find(x => x.id === oid); if(!o) return;
+        o.status = 'confirmed';
+        if(o.items.length > 0) {
+            const p = productsDB[o.items[0].id];
+            if(p) {
+                if(p.deliveryLink && !o.deliveryLink) o.deliveryLink = p.deliveryLink;
+                if(p.licenseKey && !o.licenseKey) o.licenseKey = p.licenseKey;
+                if(p.deliveryNote && !o.deliveryNote) o.deliveryNote = p.deliveryNote;
+            }
+        }
+        saveOrdersToFB(); refreshAll(); toast('✅ Confirmed! Opening delivery...');
+        setTimeout(() => openDeliveryModal(oid), 400);
+    }
+    
+    function quickCancel(oid) {
+        if(confirm('Cancel order #'+oid+'?')) {
+            const o = orders.find(x => x.id === oid);
+            if(o) { o.status = 'cancelled'; saveOrdersToFB(); refreshAll(); toast('❌ Cancelled'); }
+        }
+    }
+    
+    function confirmOrderFromModal() { if(currentOrderId) quickConfirm(currentOrderId); closeModal('orderDetailModal'); }
+    function cancelOrderFromModal() { if(currentOrderId) quickCancel(currentOrderId); closeModal('orderDetailModal'); }
+    
+    function confirmAllPending() {
+        const p = orders.filter(o => o.status === 'pending');
+        if(!p.length) { toast('No pending orders!'); return; }
+        if(confirm(`Confirm ALL ${p.length} pending orders?`)) {
+            p.forEach(o => o.status = 'confirmed');
+            saveOrdersToFB(); refreshAll(); toast(`✅ ${p.length} confirmed!`);
+        }
+    }
+    
+    // ============ DELIVERY ============
+    function openDeliveryModal(oid) {
+        const o = orders.find(x => x.id === oid); if(!o) return;
+        currentOrderId = oid;
+        document.getElementById('deliveryOrderId').textContent = '#'+oid;
+        document.getElementById('deliveryOrderItems').textContent = o.items.map(i => i.name).join(', ');
+        document.getElementById('deliveryLink').value = o.deliveryLink || '';
+        document.getElementById('deliveryKey').value = o.licenseKey || '';
+        document.getElementById('deliveryNote').value = o.deliveryNote || '';
+        const sel = document.getElementById('autoFillProduct');
+        sel.innerHTML = '<option value="">-- Select product --</option>';
+        for(const item of o.items) {
+            const p = productsDB[item.id];
+            if(p && (p.deliveryLink || p.licenseKey)) sel.innerHTML += `<option value="${p.id}">${p.name}</option>`;
+        }
+        if(!o.deliveryLink && !o.licenseKey && o.items.length > 0) {
+            const fp = productsDB[o.items[0].id];
+            if(fp && (fp.deliveryLink || fp.licenseKey)) {
+                document.getElementById('deliveryLink').value = fp.deliveryLink || '';
+                document.getElementById('deliveryKey').value = fp.licenseKey || '';
+                document.getElementById('deliveryNote').value = fp.deliveryNote || '';
+            }
+        }
+        document.getElementById('deliveryModal').classList.add('show');
+    }
+    
+    function autoFillDelivery() {
+        const pid = parseInt(document.getElementById('autoFillProduct').value);
+        if(!pid) return;
+        const p = productsDB[pid];
+        if(p) {
+            document.getElementById('deliveryLink').value = p.deliveryLink || '';
+            document.getElementById('deliveryKey').value = p.licenseKey || '';
+            document.getElementById('deliveryNote').value = p.deliveryNote || '';
+            toast('📋 Auto-filled!');
+        }
+    }
+    
+    function saveDeliveryLink() {
+        const o = orders.find(x => x.id === currentOrderId); if(!o) return;
+        const l = document.getElementById('deliveryLink').value.trim();
+        const k = document.getElementById('deliveryKey').value.trim();
+        const n = document.getElementById('deliveryNote').value.trim();
+        if(!l && !k) { toast('⚠️ Provide link or key!'); return; }
+        o.deliveryLink = l; o.licenseKey = k; o.deliveryNote = n;
+        o.deliveredAt = new Date().toISOString(); o.status = 'shipped';
+        saveOrdersToFB(); closeModal('deliveryModal'); refreshAll();
+        toast('✅ Delivery sent!');
+    }
+    
+    // ============ PRODUCTS ============
+    function renderProductsTable(filtered = null) {
+        const data = filtered || Object.values(productsDB);
+        const tbody = document.getElementById('productsTableBody');
+        if(!data.length) { tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:30px;color:#888;">No products</td></tr>'; return; }
+        tbody.innerHTML = data.map(p => `
+            <tr><td style="color:var(--red);font-weight:700;">#${p.id}</td><td>${p.name}</td><td>${p.category==='location'?'📍 Location':'🎯 Headshot'}</td><td style="font-weight:700;color:var(--green);">৳${p.currentPrice}</td>
+            <td>${p.deliveryLink?'<span class="has-delivery">🔗 '+p.deliveryLink.substring(0,30)+'...</span>':'<span class="no-delivery">Not set</span>'}${p.licenseKey?'<br><span style="color:var(--gold);font-size:10px;">🔑 '+p.licenseKey.substring(0,20)+'...</span>':''}</td>
+            <td><button class="btn btn-edit" onclick="editProduct(${p.id})">✏️</button><button class="btn btn-delivery" onclick="quickSetDelivery(${p.id})">🔗</button><button class="btn btn-delete" onclick="deleteProduct(${p.id})">🗑️</button></td></tr>
+        `).join('');
+    }
+    
+    function filterProducts() {
+        const s = document.getElementById('productSearch').value.toLowerCase();
+        const c = document.getElementById('productCatFilter').value;
+        let f = Object.values(productsDB);
+        if(c !== 'all') f = f.filter(p => p.category === c);
+        if(s) f = f.filter(p => p.name.toLowerCase().includes(s));
+        renderProductsTable(f);
+    }
+    
+    function openProductModal(editId = null) {
+        document.getElementById('productModalTitle').textContent = editId ? '✏️ EDIT PANEL' : '➕ ADD NEW PANEL';
+        document.getElementById('saveProductBtn').textContent = editId ? '💾 UPDATE' : '💾 SAVE';
+        if(editId) {
+            const p = productsDB[editId];
+            document.getElementById('editProductId').value = editId;
+            document.getElementById('prodName').value = p.name;
+            document.getElementById('prodPrice').value = p.currentPrice;
+            document.getElementById('prodOldPrice').value = p.oldPrice;
+            document.getElementById('prodCategory').value = p.category;
+            document.getElementById('prodImage').value = p.image || '';
+            document.getElementById('prodDesc').value = p.desc || '';
+            document.getElementById('prodFeatures').value = (p.features || []).join(', ');
+            document.getElementById('prodBenefits').value = (p.benefits || []).join(', ');
+            document.getElementById('prodDeliveryLink').value = p.deliveryLink || '';
+            document.getElementById('prodLicenseKey').value = p.licenseKey || '';
+            document.getElementById('prodDeliveryNote').value = p.deliveryNote || '';
+            updateImagePreview();
+        } else {
+            document.getElementById('editProductId').value = '';
+            ['prodName','prodPrice','prodOldPrice','prodImage','prodDesc','prodFeatures','prodBenefits','prodDeliveryLink','prodLicenseKey','prodDeliveryNote'].forEach(id => document.getElementById(id).value = '');
+            document.getElementById('prodCategory').value = 'location';
+            document.getElementById('prodImagePreview').style.display = 'none';
+        }
+        document.getElementById('productModal').classList.add('show');
+    }
+    
+    function editProduct(id) { openProductModal(id); }
+    
+    function quickSetDelivery(pid) {
+        const p = productsDB[pid]; if(!p) return;
+        openProductModal(pid);
+        setTimeout(() => document.getElementById('prodDeliveryLink').scrollIntoView({ behavior:'smooth', block:'center' }), 300);
+    }
+    
+    function saveProduct() {
+        const editId = document.getElementById('editProductId').value;
+        const name = document.getElementById('prodName').value.trim();
+        const price = parseInt(document.getElementById('prodPrice').value) || 0;
+        const oldPrice = parseInt(document.getElementById('prodOldPrice').value) || 0;
+        if(!name) { toast('⚠️ Name required!'); return; }
+        const data = {
+            name, currentPrice:price, oldPrice, save:oldPrice-price,
+            category: document.getElementById('prodCategory').value,
+            image: document.getElementById('prodImage').value.trim() || 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=400',
+            images: [document.getElementById('prodImage').value.trim() || 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=400'],
+            desc: document.getElementById('prodDesc').value.trim(),
+            features: document.getElementById('prodFeatures').value.split(',').map(s=>s.trim()).filter(Boolean),
+            benefits: document.getElementById('prodBenefits').value.split(',').map(s=>s.trim()).filter(Boolean),
+            deliveryLink: document.getElementById('prodDeliveryLink').value.trim(),
+            licenseKey: document.getElementById('prodLicenseKey').value.trim(),
+            deliveryNote: document.getElementById('prodDeliveryNote').value.trim(),
+            reviews: []
+        };
+        if(editId) {
+            productsDB[editId] = { ...productsDB[editId], ...data };
+        } else {
+            const newId = Date.now();
+            productsDB[newId] = { id:newId, ...data };
+        }
+        saveProductsToFB(); closeModal('productModal'); refreshAll();
+        toast('✅ Panel saved!');
+    }
+    
+    function deleteProduct(id) {
+        if(confirm('Delete permanently?')) {
+            delete productsDB[id];
+            saveProductsToFB(); refreshAll();
+            toast('🗑️ Deleted');
+        }
+    }
+    
+    // ============ BULK DELIVERY ============
+    function openBulkDeliveryModal() {
+        const prods = Object.values(productsDB);
+        document.getElementById('bulkDeliveryContent').innerHTML = prods.map(p => `
+            <div style="background:#0a0a0a;border:1px solid #333;border-radius:10px;padding:12px;margin-bottom:10px;">
+                <div style="font-weight:700;color:var(--red);margin-bottom:8px;">${p.name}</div>
+                <div class="flex-row">
+                    <div class="flex-1"><input type="text" class="form-input" id="bulkLink_${p.id}" placeholder="Link" value="${p.deliveryLink||''}" style="font-size:11px;"></div>
+                    <div class="flex-1"><input type="text" class="form-input" id="bulkKey_${p.id}" placeholder="Key" value="${p.licenseKey||''}" style="font-size:11px;"></div>
+                </div>
+            </div>
+        `).join('') || '<p style="color:#888;">No products</p>';
+        document.getElementById('bulkDeliveryModal').classList.add('show');
+    }
+    
+    function saveBulkDelivery() {
+        let c = 0;
+        Object.values(productsDB).forEach(p => {
+            const le = document.getElementById('bulkLink_'+p.id);
+            const ke = document.getElementById('bulkKey_'+p.id);
+            if(le) p.deliveryLink = le.value.trim();
+            if(ke) p.licenseKey = ke.value.trim();
+            if(le || ke) c++;
+        });
+        saveProductsToFB(); closeModal('bulkDeliveryModal'); refreshAll();
+        toast(`✅ ${c} updated!`);
+    }
+    
+    // ============ SETTINGS ============
+    function loadSettingsForm() {
+        document.getElementById('shopName').value = settings.shopName;
+        document.getElementById('bkashNumber').value = settings.bkashNumber;
+        document.getElementById('deliveryFee').value = settings.deliveryFee;
+        document.getElementById('adminPassword').value = '';
+    }
+    
+    function saveSettings() {
+        settings.shopName = document.getElementById('shopName').value.trim();
+        settings.bkashNumber = document.getElementById('bkashNumber').value.trim();
+        settings.deliveryFee = parseInt(document.getElementById('deliveryFee').value) || 60;
+        const np = document.getElementById('adminPassword').value.trim();
+        if(np) settings.password = np;
+        saveSettingsToFB(); toast('✅ Settings saved!');
+    }
+    
+    function clearAllData() {
+        if(confirm('⚠️ DELETE ALL ORDERS?')) {
+            orders = []; saveOrdersToFB(); refreshAll(); toast('🗑️ Cleared');
+        }
+    }
+    
+    // ============ UTILS ============
+    function refreshAll() {
+        updateStats();
+        renderOrdersTable();
+        renderProductsTable();
+    }
+    
+    function closeModal(id) {
+        document.getElementById(id).classList.remove('show');
+        if(id === 'orderDetailModal') currentOrderId = null;
+    }
+    
+    function exportOrders() {
+        if(!orders.length) { toast('No orders'); return; }
+        let csv = 'Order ID,Date,Status,Items,Total,TrxID,Last 4,Delivery Link\n';
+        orders.forEach(o => {
+            csv += `"${o.id}","${new Date(o.date).toLocaleString()}","${o.status}","${o.items.map(i=>i.name).join('; ')}","${o.total}","${o.payment?.transactionId||''}","${o.payment?.lastFourDigits||''}","${o.deliveryLink||''}"\n`;
+        });
+        const blob = new Blob([csv], { type:'text/csv' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `orders_${new Date().toISOString().slice(0,10)}.csv`;
+        a.click(); toast('📥 Exported!');
+    }
+    
+    function logout() { if(confirm('Logout?')) window.location.reload(); }
+    
+    function toast(msg) {
+        const t = document.getElementById('toastMsg');
+        t.textContent = msg; t.classList.add('show');
+        clearTimeout(t._timeout);
+        t._timeout = setTimeout(() => t.classList.remove('show'), 2000);
+    }
+    
+    function updateImagePreview() {
+        const url = document.getElementById('prodImage').value.trim();
+        const preview = document.getElementById('prodImagePreview');
+        if(url) { preview.src = url; preview.style.display = 'block'; }
+        else preview.style.display = 'none';
+    }
+    
+    document.getElementById('prodImage').addEventListener('input', updateImagePreview);
+    
+    document.addEventListener('click', function(e) {
+        if(e.target.classList.contains('modal-overlay')) e.target.classList.remove('show');
+    });
+    
+    // ============ INIT ============
+    function init() {
+        loadProductsFromFB();
+        loadOrdersFromFB();
+        loadSettingsFromFB();
+        updateClock();
+        refreshAll();
+    }
+    
+    window.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
